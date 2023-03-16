@@ -136,16 +136,48 @@ static const uint8_t font5x8[] = {
     0x00,0x00,0x78,0x78,0x78,0x78,0x00,0x00
 };
 
-#define ST7920_CS()              {cs.set(1);wait_us(10);}
-#define ST7920_NCS()             {cs.set(0);wait_us(10);}
-#define ST7920_WRITE_BYTE(a)     {this->spi->write((a)&0xf0);this->spi->write((a)<<4);wait_us(10);}
-#define ST7920_WRITE_BYTES(p,l)  {uint8_t i;for(i=0;i<l;i++){this->spi->write(*p&0xf0);this->spi->write(*p<<4);p++;} wait_us(10); }
-#define ST7920_SET_CMD()         {this->spi->write(0xf8);wait_us(10);}
-#define ST7920_SET_DAT()         {this->spi->write(0xfa);wait_us(10);}
 #define PAGE_HEIGHT 32  //512 byte framebuffer
 #define WIDTH 128
 #define HEIGHT 64
 #define FB_SIZE WIDTH*HEIGHT/8
+
+inline void RrdGlcd::ST7920_CS() {
+    cs.set(1);
+    wait_us(10);
+}
+                    
+inline void RrdGlcd::ST7920_NCS() {
+    cs.set(0);
+    wait_us(10);
+}
+                     
+inline void RrdGlcd::ST7920_WRITE_BYTE(const uint8_t a) {
+    this->spi->write((a)&0xf0);
+    this->spi->write((a)<<4);
+    wait_us(10);
+}
+                             
+inline uint8_t * RrdGlcd::ST7920_WRITE_BYTES(uint8_t *p, const int l) {
+    uint8_t i;
+    for ( i = 0 ; i < l; i++ ) {
+        this->spi->write(*p&0xf0);
+        this->spi->write(*p<<4);
+        p++;
+    }
+    wait_us(10);
+    return p;
+}
+                                
+inline void RrdGlcd::ST7920_SET_CMD() {
+     this->spi->write(0xf8);
+     wait_us(10);
+}
+                         
+inline void RrdGlcd::ST7920_SET_DAT() {
+     this->spi->write(0xfa);
+     wait_us(10);
+}
+
 
 RrdGlcd::RrdGlcd(int spi_channel, Pin cs) {
     PinName mosi, miso, sclk;
@@ -162,7 +194,7 @@ RrdGlcd::RrdGlcd(int spi_channel, Pin cs) {
     //chip select
     this->cs= cs;
     this->cs.set(0);
-    fb= (uint8_t *)AHB0.alloc(FB_SIZE); // grab some memoery from USB_RAM
+    fb= (uint8_t *)AHB0.alloc(FB_SIZE); // grab some memory from USB_RAM
     if(fb == NULL) {
         THEKERNEL->streams->printf("Not enough memory available for frame buffer");
     }
@@ -218,7 +250,7 @@ void RrdGlcd::displayString(int row, int col, const char *ptr, int length) {
     dirty= true;
 }
 
-void RrdGlcd::renderChar(uint8_t *fb, char c, int ox, int oy) {
+void RrdGlcd::renderChar(char c, int ox, int oy) {
     if(fb == NULL) return;
     // using the specific font data where x is in one byte and y is in consecutive bytes
     // the x bits are left aligned and right padded
@@ -245,7 +277,7 @@ void RrdGlcd::displayChar(int row, int col, char c) {
     if(x+6 > WIDTH) return;
 
     // convert row/column into y and x pixel positions based on font size
-    renderChar(this->fb, c, x, row*8);
+    renderChar(c, x, row*8);
 }
 
 void RrdGlcd::renderGlyph(int xp, int yp, const uint8_t *g, int pixelWidth, int pixelHeight) {
@@ -298,10 +330,14 @@ void RrdGlcd::renderGlyph(int xp, int yp, const uint8_t *g, int pixelWidth, int 
 }
 
 // copy frame buffer to graphic buffer on display
-void RrdGlcd::fillGDRAM(const uint8_t *bitmap) {
+void RrdGlcd::fillGDRAM() {
+    uint8_t *bitmap = fb;
     unsigned char i, y;
+
+    ST7920_CS();
+    ST7920_SET_CMD();   // without it, first line wil not display    
+
     for ( i = 0 ; i < 2 ; i++ ) {
-        ST7920_CS();
         for ( y = 0 ; y < PAGE_HEIGHT ; y++ ) {
             ST7920_SET_CMD();
             ST7920_WRITE_BYTE(0x80 | y);
@@ -311,14 +347,14 @@ void RrdGlcd::fillGDRAM(const uint8_t *bitmap) {
                 ST7920_WRITE_BYTE(0x80 | 0x08);
             }
             ST7920_SET_DAT();
-            ST7920_WRITE_BYTES(bitmap, WIDTH/8); // bitmap gets incremented in this macro
+            bitmap = ST7920_WRITE_BYTES(bitmap, WIDTH/8); // bitmap gets incremented in this macro
         }
-        ST7920_NCS();
     }
+    ST7920_NCS();
 }
 
 void RrdGlcd::refresh() {
     if(!inited || !dirty) return;
-    fillGDRAM(this->fb);
+    fillGDRAM();
     dirty= false;
 }

@@ -46,7 +46,7 @@ public:
     *@return none
     *
     */
-    void fillGDRAM(const uint8_t *bitmap);
+    void fillGDRAM();
 
     // copy the bits in g, of X line size pixels, to x, y in frame buffer
     void renderGlyph(int x, int y, const uint8_t *g, int pixelWidth, int pixelHeight);
@@ -56,8 +56,15 @@ public:
 private:
     Pin cs;
     mbed::SPI* spi;
-    void renderChar(uint8_t *fb, char c, int ox, int oy);
+    void renderChar(char c, int ox, int oy);
     void displayChar(int row, int column,char inpChr);
+    
+    void ST7920_CS();
+    void ST7920_NCS();
+    void ST7920_WRITE_BYTE(const uint8_t a);
+    uint8_t * ST7920_WRITE_BYTES(uint8_t *p, const int l);
+    void ST7920_SET_CMD();
+    void ST7920_SET_DAT();
 
     uint8_t *fb;
     bool inited;
